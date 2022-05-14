@@ -71,6 +71,7 @@ contract ERC721MarketplaceV1 {
         offeringRegistry[_offeringId].operatorRoyalty.royaltyFraction =  operatorAmount;
         // Creator
         (address artistReceiver, uint256 artistAmount) = ERC2981(offeringRegistry[_offeringId].hostContract).supportsInterface(_INTERFACE_ID_ERC2981) ? (ERC2981(offeringRegistry[_offeringId].hostContract).royaltyInfo(offeringRegistry[_offeringId].tokenId, _price)) : (address(0), 0);
+        _price -= artistAmount;
         offeringRegistry[_offeringId].artistRoyalty.receiver =  artistReceiver;
         offeringRegistry[_offeringId].artistRoyalty.royaltyFraction =  artistAmount;
         // Seller
@@ -78,6 +79,20 @@ contract ERC721MarketplaceV1 {
         offeringRegistry[_offeringId].sellerRoyalty.receiver =  msg.sender;
         offeringRegistry[_offeringId].sellerRoyalty.royaltyFraction =  sellerAmount;
         return (providerAmount, operatorAmount, artistReceiver, artistAmount, sellerAmount);
+    }
+
+    function previewPlaceOffering(address _hostContract, uint256 _tokenId, uint256 _price, address _operatorReceiver) external view returns (uint256 sellerCut, address artist) {
+        // Provider
+        (uint256 providerAmount) = getRoyaltyValue(_price, feeRegistry[provider]);
+        _price -= providerAmount;
+        // Operator
+        (uint256 operatorAmount) = getRoyaltyValue(_price, feeRegistry[_operatorReceiver]);
+        _price -= operatorAmount;
+        // Creator
+        (address artistReceiver, uint256 artistAmount) = ERC2981(_hostContract).supportsInterface(_INTERFACE_ID_ERC2981) ? (ERC2981(_hostContract).royaltyInfo(_tokenId, _price)) : (address(0), 0);
+        _price -= artistAmount;
+        // Seller
+        return (_price, artistReceiver);
     }
 
     function placeOffering (address _hostContract, uint256 _tokenId, uint256 _price, address _operatorReceiver) external {
