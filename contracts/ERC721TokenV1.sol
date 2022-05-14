@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Token is ERC721, ERC721URIStorage, Ownable {
+contract ERC721TokenV1 is ERC721, ERC721URIStorage, Ownable {
 constructor() ERC721("MyNFT", "MyNFT") {}
 
 function safeMint(address to, uint256 tokenId) public onlyOwner {

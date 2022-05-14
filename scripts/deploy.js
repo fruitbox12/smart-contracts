@@ -1,16 +1,11 @@
 const hre = require("hardhat");
-const fs = require('fs');
 
 async function main() {
-  const [owner, provider] = await ethers.getSigners();
-  const NFTMarketplace = await hre.ethers.getContractFactory("Marketplace");
-  const nftMarketplace = await NFTMarketplace.deploy(owner.address, 0, provider.address, 0);
-  await nftMarketplace.deployed();
-  console.log("nftMarketplace deployed to:", nftMarketplace.address);
-
-  // fs.writeFileSync('./config.js', `
-  //   export const marketplaceAddress = "${nftMarketplace.address}"
-  // `)
+  const [provider] = await ethers.getSigners();
+  const ERC721MarketplaceV1 = await hre.ethers.getContractFactory("ERC721MarketplaceV1");
+  const marketplace = await ERC721MarketplaceV1.connect(provider).deploy();
+  await marketplace.deployed();
+  console.log("ERC721MarketplaceV1 deployed to:", marketplace.address);
 }
 
 main()

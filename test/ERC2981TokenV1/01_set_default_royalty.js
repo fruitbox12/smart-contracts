@@ -7,11 +7,10 @@ describe('Token setDefaultRoyalty', () => {
     let builderA, builderB, builderC;
     let contract;
     const baseRoyalty = 500;
-    const examplePrice = 1000;
 
     beforeEach(async () => {
         [dappify, beneficiaryA, beneficiaryB, beneficiaryC, builderA, builderB, builderC] = await ethers.getSigners();
-        const Token = await ethers.getContractFactory('TokenERC2981');
+        const Token = await ethers.getContractFactory('ERC2981TokenV1');
         contract = await Token.deploy();
         await contract.deployed();
     });
@@ -27,15 +26,4 @@ describe('Token setDefaultRoyalty', () => {
         await expect(contract.connect(builderA).setDefaultRoyalty(beneficiaryB.address, baseRoyalty))
         .to.not.be.reverted;
     });
-
-    // it('Should allow royalty from 0% to 100%', async () => {
-    //     await expect(contract.mint(builderA.address, beneficiaryA.address, -1))
-    //     .to.be.reverted;
-    //     await expect(contract.mint(builderA.address, beneficiaryA.address, 0))
-    //     .to.not.be.reverted;
-    //     await expect(contract.mint(builderA.address, beneficiaryA.address, 10000))
-    //     .to.not.be.reverted;
-    //     await expect(contract.mint(builderA.address, beneficiaryA.address, 10001))
-    //     .to.be.revertedWith('royalty fee will exceed salePrice');
-    // });
 });

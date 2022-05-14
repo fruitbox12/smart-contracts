@@ -1,5 +1,6 @@
 /* test/sample-test.js */
 const { expect } = require('chai');
+const { BigNumber } = require('ethers');
 
 describe("Marketplace sales", () => {
   let ethProvider;
@@ -7,24 +8,23 @@ describe("Marketplace sales", () => {
   let provider
   let buyer
   let seller, seller2;
-  let ownerFee;
-  let providerFee;
   let marketplace;
   let nft;
+  let creator;
 
   beforeEach(async function () {
     // Accounts
-    [owner, provider, buyer, seller, seller2] = await ethers.getSigners();
+    [owner, provider, buyer, seller, seller2, creator] = await ethers.getSigners();
     // Royalties
     ownerFee = 5;
     providerFee = 2;
     // Marketplace
-    const Marketplace = await ethers.getContractFactory("Marketplace");
-    marketplace = await Marketplace.deploy(owner.address, ownerFee, provider.address, providerFee);
+    const Marketplace = await ethers.getContractFactory('ERC721MarketplaceV1');
+    marketplace = await Marketplace.connect(provider).deploy();
     await marketplace.deployed();
     // Nft
-    const Token = await ethers.getContractFactory("Token");
-    nft = await Token.deploy();
+    const Token = await ethers.getContractFactory('ERC721TokenV1');
+    nft = await Token.connect(creator).deploy();
     await nft.deployed();
     // Provider
     ethProvider = waffle.provider;
@@ -32,7 +32,7 @@ describe("Marketplace sales", () => {
 
   it("Should allow an NFT owner to publish for sale", async function() {
     const tokenId = 0;
-    const price = 1;
+    const price = 1000;
     const expectedClosed = false;
 
     // Mint test token to put on marketplace
@@ -40,7 +40,7 @@ describe("Marketplace sales", () => {
     expect(await nft.ownerOf(0)).to.equal(seller.address);
 
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price);
+    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
@@ -56,20 +56,20 @@ describe("Marketplace sales", () => {
 
   it("Should not allow anyone else than the owner to publish an NFT for sale", async function() {
     const tokenId = 0;
-    const price = ethers.utils.parseEther(JSON.stringify(1.234));
+    const price = ethers.utils.parseEther(JSON.stringify(1234.567));
 
     // Mint test token to put on marketplace
     await nft.safeMint(seller.address, tokenId);
     expect(await nft.ownerOf(0)).to.equal(seller.address);
 
     // Put on marketplace
-    await expect(marketplace.connect(seller2).placeOffering(nft.address, tokenId, price))
+    await expect(marketplace.connect(seller2).placeOffering(nft.address, tokenId, price, owner.address))
     .to.be.revertedWith('Only token owners can put them for sale');
   });
 
   it("Should allow a buyer to acquire an NFT for the given price", async function() {
     const tokenId = 0;
-    const price = 1;
+    const price = 1000;
 
     // Mint test token to put on marketplace
     await nft.safeMint(seller.address, tokenId);
@@ -81,18 +81,21 @@ describe("Marketplace sales", () => {
     expect(approved).to.equal(marketplace.address);
 
     // Put on marketplace
-    const txSell = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price);
+    const txSell = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
 
     // Balance snapshot
-    const balanceBuyerStart = ethers.utils.formatEther(await ethProvider.getBalance(buyer.address));
-    const balanceSellerStart = ethers.utils.formatEther(await ethProvider.getBalance(seller.address));
-  
+    const balanceBuyerStart = await ethProvider.getBalance(buyer.address);
+    const balanceSellerStart = await ethProvider.getBalance(seller.address);
+    const balanceProviderStart = await ethProvider.getBalance(provider.address);
+    const balanceOperatorStart = await ethProvider.getBalance(owner.address);
+    const balanceCreatorStart = await ethProvider.getBalance(creator.address);
+
     // Get offeringId from OfferingPlaced event in transaction
     const transactionSellCompleted = await txSell.wait();
-    const offeringId = transactionSellCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
-
+    const event = transactionSellCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args;
+  
     // Purchase
-    const txBuy = await marketplace.connect(buyer).closeOffering(offeringId, {
+    const txBuy = await marketplace.connect(buyer).closeOffering(event.offeringId, {
         value: ethers.utils.parseEther(price.toString())
     });
     const transactionBuyCompleted = await txBuy.wait();
@@ -101,58 +104,38 @@ describe("Marketplace sales", () => {
     expect(await nft.ownerOf(0)).to.equal(buyer.address);
     expect(await nft.ownerOf(0)).not.to.equal(seller.address);
 
-    const balanceBuyerEnd = ethers.utils.formatEther(await ethProvider.getBalance(buyer.address));
-    const totalTxGas = ethers.utils.formatEther(transactionBuyCompleted.cumulativeGasUsed*transactionBuyCompleted.effectiveGasPrice);
+    const balanceBuyerEnd = await ethProvider.getBalance(buyer.address);
+    const totalTxGas = transactionBuyCompleted.cumulativeGasUsed.mul(transactionBuyCompleted.effectiveGasPrice);
 
     // Zero sum check -> (buyer) start balance - price - gas = buyer end balance
-    const balanceBuyerExpected = parseFloat(totalTxGas)+price+parseFloat(balanceBuyerEnd);
-    expect(parseFloat(balanceBuyerStart)).to.equal(balanceBuyerExpected);
-  
-    // Withdraw seller new balance
-    const sellerBalance = await marketplace.viewBalances(seller.address);
-    const balanceSellerActual = parseFloat(ethers.utils.formatEther(sellerBalance));
-    expect(balanceSellerActual).to.equal(price);
+    const balanceBuyerExpected = balanceBuyerEnd.add(totalTxGas).add(ethers.utils.parseUnits(price.toString()));
+    expect(balanceBuyerStart).to.equal(balanceBuyerExpected);
 
-    const withdrawTx = await marketplace.connect(seller).withdrawBalance();
-    const transactionCompleted = await withdrawTx.wait();
-    const totalWithdrawGas = ethers.utils.formatEther(transactionCompleted.cumulativeGasUsed*transactionCompleted.effectiveGasPrice);
-    
-    const withdrawTxCompleted = transactionCompleted.events?.filter((item) => {return item.event === "BalanceWithdrawn"})[0].args;
-    const amount = parseFloat(ethers.utils.formatEther(withdrawTxCompleted.amount));
-    expect(withdrawTxCompleted.beneficiary).to.equal(seller.address);
-    expect(amount).to.equal(price);
+    // Zero sum check -> (provider)
+    const balanceProviderEnd = await ethProvider.getBalance(provider.address);
+    expect(event.providerAmount.add(balanceProviderStart)).to.equal(balanceProviderEnd);
 
-    // Check is in seller wallet ---> THERE IS AN ERROR IN THIS TEST TBD <---
-    /*
-          AssertionError: expected 10000.99966084718 to equal 10000.999660847181
-      + expected - actual
+    // Zero sum check -> (operator)
+    const balanceOperatorEnd = await ethProvider.getBalance(owner.address);
+    expect(event.operatorAmount.add(balanceOperatorStart)).to.equal(balanceOperatorEnd);
 
-      -10000.99966084718
-      +10000.999660847181
+    // Zero sum check -> (creator)
+    const balanceCreatorEnd = await ethProvider.getBalance(creator.address);
+    expect(event.creatorAmount.add(balanceCreatorStart)).to.equal(balanceCreatorEnd);
 
-      Added toFixed(10) to compare up to 10 decimals, this shouldn't be here
-    */
-    const balanceSellerEnd = parseFloat(ethers.utils.formatEther(await ethProvider.getBalance(seller.address)));
-    const expectedBalanceSellerEnd = parseFloat(balanceSellerStart)+price-totalWithdrawGas;
-    expect(expectedBalanceSellerEnd.toFixed(10)).to.equal(balanceSellerEnd.toFixed(10));
-  });
-
-  it("Should not allow to withdraw if there are no balances", async function() {
-    await expect(marketplace.connect(seller).withdrawBalance())
-    .to.be.revertedWith('You don\'t have any balance to withdraw');
+    // Zero sum check -> (seller)
+    const balanceSellerEnd = await ethProvider.getBalance(seller.address);
+    expect(event.sellerAmount.add(balanceSellerStart)).to.equal(balanceSellerEnd);
   });
 
   it("Should not allow purchase if token has been transfered outside marketplace", async function() {
     const tokenId = 0;
-    const price = 1;
+    const price = 1000;
 
     // Mint test token to put on marketplace
     await nft.safeMint(seller.address, tokenId);
 
-    // Allow marketplace to be operator for the transaction
-    await nft.connect(seller).approve(marketplace.address, tokenId);
-
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
 
@@ -163,5 +146,4 @@ describe("Marketplace sales", () => {
     await expect(marketplace.connect(buyer).closeOffering(offeringId, { value: price }))
     .to.be.revertedWith('Offer is no longer valid, token was transfered outside the marketplace');
   });
-
-})
+});

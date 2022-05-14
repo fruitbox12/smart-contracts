@@ -8,23 +8,24 @@ describe("Marketplace offer withdrawal", () => {
   let marketplace;
   let nft;
   let offeringId;
+  const price = 200000;
 
   beforeEach(async function () {
     // Accounts
     [owner, provider, seller] = await ethers.getSigners();
     // Marketplace
-    const Marketplace = await ethers.getContractFactory("Marketplace");
-    marketplace = await Marketplace.deploy(owner.address, 0, provider.address, 0);
+    const Marketplace = await ethers.getContractFactory('ERC721MarketplaceV1');
+    marketplace = await Marketplace.connect(provider).deploy();
     await marketplace.deployed();
     // Nft
-    const Token = await ethers.getContractFactory("Token");
+    const Token = await ethers.getContractFactory('ERC721TokenV1');
     nft = await Token.deploy();
     await nft.deployed();
     // Mint test token to put on marketplace
     await nft.safeMint(seller.address, 0);
     expect(await nft.ownerOf(0)).to.equal(seller.address);
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft.address, 0, 2);
+    const tx = await marketplace.connect(seller).placeOffering(nft.address, 0, price, owner.address);
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
     offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
@@ -35,7 +36,7 @@ describe("Marketplace offer withdrawal", () => {
     const currentOffering = await marketplace.viewOffering(offeringId);
     expect(currentOffering[0]).to.equal(nft.address);
     expect(currentOffering[1]).to.equal(0);
-    expect(currentOffering[2]).to.equal(2);
+    expect(currentOffering[2]).to.equal(price);
     expect(currentOffering[3]).to.equal(false);
 
     await expect(marketplace.connect(provider).withdrawOffering(offeringId))
