@@ -40,14 +40,34 @@ contract ERC721MarketplaceV1 {
         address hostContract;
         uint256 tokenId;
         uint256 price;
+
+        uint256 providerFraction;
+        uint256 roFraction;
+        uint256 royaltyFraction;
+
+    }
+
+    struct marketRoyalties{
         royalty providerRoyalty;
-        royalty artistRoyalty;
         royalty operatorRoyalty;
-        royalty sellerRoyalty;
     }
     
     mapping (bytes32 => offering) offeringRegistry;
-    mapping (address => uint16) feeRegistry;
+    // mapping (address => uint16) feeRegistry;
+    mapping (string => marketRoyalties) feeRegistry;
+
+    function setMarketOperatorRoyalty(string marketplaceId, address _operatorReceiver, uint256 royaltyFraction) external{
+
+    }
+
+    function setMarketProviderRoyalty(string marketplaceId, address _providerReceiver, uint256 royaltyFraction) external{
+
+    }
+
+    function removeMarketRoyalties(string marketplaceId){ //TODO: Only Owner
+         if(feeRegistry[marketplaceId])
+            delete feeRegistry[marketplaceId];
+    }
 
     constructor () {
         provider = msg.sender;
@@ -169,7 +189,7 @@ contract ERC721MarketplaceV1 {
     }
 
     function getRoyaltyFee(address _address) external view returns (uint16) {
-        return feeRegistry[_address];       
+        return  [_address];       
     }
 
     function viewOffering(bytes32 _offeringId) external view returns (address, uint256, uint256, bool, uint256) {
