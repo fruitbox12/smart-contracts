@@ -56,17 +56,27 @@ contract ERC721MarketplaceV1 {
     // mapping (address => uint16) feeRegistry;
     mapping (string => marketRoyalties) feeRegistry;
 
-    function setMarketOperatorRoyalty(string marketplaceId, address _operatorReceiver, uint256 royaltyFraction) external{
+    modifier onlyOwner() {
+        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+    }
+
+    function setMarketOperatorRoyalty(string marketplaceId, address operatorReceiver, uint256 royaltyFraction) external{
+
+        require(!feeRegistry[marketplaceId].isValue || feeRegistry[marketplaceId].operatorRoyalty.receiver == _msgSender());
+        feeRegistry[marketplaceId].operatorRoyalty.receiver = _operatorReceiver;
+        feeRegistry[marketplaceId].royaltyFraction.receiver = royaltyFraction;
 
     }
 
-    function setMarketProviderRoyalty(string marketplaceId, address _providerReceiver, uint256 royaltyFraction) external{
-
+    function setMarketProviderRoyalty(string marketplaceId, address providerReceiver, uint256 royaltyFraction) onlyOwner{ 
+        feeRegistry[marketplaceId].providerRoyalty.receiver = providerReceiver;
+        feeRegistry[marketplaceId].providerRoyalty.royaltyFraction = royaltyFraction;
     }
 
-    function removeMarketRoyalties(string marketplaceId){ //TODO: Only Owner
-         if(feeRegistry[marketplaceId])
+    function removeMarketRoyalties(string marketplaceId) onlyOwner{ //TODO: Only Owner
+         if(feeRegistry[marketplaceId].isValue){
             delete feeRegistry[marketplaceId];
+         }
     }
 
     constructor () {
