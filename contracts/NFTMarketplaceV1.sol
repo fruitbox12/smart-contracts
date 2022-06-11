@@ -2,12 +2,17 @@
 pragma solidity 0.8.9;
 
 import "hardhat/console.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 
-contract ERC721MarketplaceV1 {
+contract NFTMarketplaceV1 {
 
     bytes4 private constant _INTERFACE_ID_ERC2981 = 0x2a55205a;
+    // bytes4 private constant _INTERFACE_ID_ERC721 = 0x2a55205a;
+    // bytes4 private constant _INTERFACE_ID_ERC1155 = 0x2a55205a;
+    bytes4 public constant _INTERFACE_ID_ERC1155 = type(IERC1155).interfaceId;
+    bytes4 public constant _INTERFACE_ID_ERC721 = type(IERC721).interfaceId;
 
     event OfferingPlaced(   bytes32 indexed offeringId, 
                             address indexed hostContract, 
@@ -96,8 +101,14 @@ contract ERC721MarketplaceV1 {
     }
 
     function placeOffering (address _hostContract, uint256 _tokenId, uint256 _price, address _operatorReceiver) external {
-        ERC721 hostContract = ERC721(_hostContract);
-        require(hostContract.ownerOf(_tokenId) == msg.sender, "Only token owners can put them for sale");
+        if (IERC165(_hostContract).supportsInterface(_INTERFACE_ID_ERC721)) {
+            IERC721 hostContract = IERC721(_hostContract);
+            require(hostContract.ownerOf(_tokenId) == msg.sender, "Only token owners can put them for sale");
+        } else if (IERC165(_hostContract).supportsInterface(_INTERFACE_ID_ERC1155)) {
+            IERC1155 hostContract = IERC1155(_hostContract);
+            require(hostContract.balanceOf(msg.sender, _tokenId) >= 1, "Only token owners can put them for sale");
+        }
+
         bytes32 offeringId = keccak256(abi.encodePacked(offeringNonce, _hostContract, _tokenId));
 
         offeringRegistry[offeringId].offerer = msg.sender;
@@ -128,18 +139,21 @@ contract ERC721MarketplaceV1 {
 
     function updateOffering (bytes32 _offeringId, uint256 _price) external {
         require(offeringRegistry[_offeringId].closed != true, "Offering is closed");
-        ERC721 hostContract = ERC721(offeringRegistry[_offeringId].hostContract);
-        require(hostContract.ownerOf(offeringRegistry[_offeringId].tokenId) == msg.sender, "Only the token owner can perform this action");
+        if (IERC165(offeringRegistry[_offeringId].hostContract).supportsInterface(_INTERFACE_ID_ERC721)) {
+            IERC721 hostContract = IERC721(offeringRegistry[_offeringId].hostContract);
+            require(hostContract.ownerOf(offeringRegistry[_offeringId].tokenId) == msg.sender, "Only the token owner can perform this action");
+        } else if (IERC165(offeringRegistry[_offeringId].hostContract).supportsInterface(_INTERFACE_ID_ERC1155)) {
+            IERC1155 hostContract = IERC1155(offeringRegistry[_offeringId].hostContract);
+            require(hostContract.balanceOf(offeringRegistry[_offeringId].offerer, offeringRegistry[_offeringId].tokenId) > 0 && offeringRegistry[_offeringId].offerer == msg.sender, "Only the token owner can perform this action");
+        }
+
         offeringRegistry[_offeringId].price = _price;
         calculateRoyalties(_offeringId, _price, offeringRegistry[_offeringId].operatorRoyalty.receiver);
         emit  OfferingUpdated(_offeringId, _price);
     }
-    
-    function closeOffering(bytes32 _offeringId) external payable {
-        require(msg.value >= offeringRegistry[_offeringId].price, "Not enough funds to buy");
+
+    function payoutOffering(bytes32 _offeringId) private {
         require(offeringRegistry[_offeringId].closed != true, "Offering is closed");
-        ERC721 hostContract = ERC721(offeringRegistry[_offeringId].hostContract);
-        require(hostContract.ownerOf(offeringRegistry[_offeringId].tokenId) == offeringRegistry[_offeringId].offerer, "Offer is no longer valid, token was transfered outside the marketplace");
         offeringRegistry[_offeringId].closed = true;
         // Payout
         if (offeringRegistry[_offeringId].providerRoyalty.receiver != address(0)) {
@@ -154,7 +168,22 @@ contract ERC721MarketplaceV1 {
         if (offeringRegistry[_offeringId].sellerRoyalty.receiver != address(0)) {
             payable(offeringRegistry[_offeringId].sellerRoyalty.receiver).transfer(offeringRegistry[_offeringId].sellerRoyalty.royaltyFraction);
         }
-        hostContract.safeTransferFrom(offeringRegistry[_offeringId].offerer, msg.sender, offeringRegistry[_offeringId].tokenId);
+    }
+    
+    function closeOffering(bytes32 _offeringId) external payable {
+        require(msg.value >= offeringRegistry[_offeringId].price, "Not enough funds to buy");
+        if (IERC165(offeringRegistry[_offeringId].hostContract).supportsInterface(_INTERFACE_ID_ERC721)) {
+            IERC721 hostContract = IERC721(offeringRegistry[_offeringId].hostContract);
+            require(hostContract.ownerOf(offeringRegistry[_offeringId].tokenId) == offeringRegistry[_offeringId].offerer, "Offer is no longer valid, token was transfered outside the marketplace");
+            payoutOffering(_offeringId);
+            hostContract.safeTransferFrom(offeringRegistry[_offeringId].offerer, msg.sender, offeringRegistry[_offeringId].tokenId);
+        } else if (IERC165(offeringRegistry[_offeringId].hostContract).supportsInterface(_INTERFACE_ID_ERC1155)) {
+            IERC1155 hostContract = IERC1155(offeringRegistry[_offeringId].hostContract);
+            require(hostContract.balanceOf(offeringRegistry[_offeringId].offerer, offeringRegistry[_offeringId].tokenId) > 0, "Offer is no longer valid, token was transfered outside the marketplace");
+            payoutOffering(_offeringId);
+            bytes memory data;
+            hostContract.safeTransferFrom(offeringRegistry[_offeringId].offerer, msg.sender, offeringRegistry[_offeringId].tokenId, 1, data);
+        }
         emit OfferingClosed(_offeringId, msg.sender);
     } 
 

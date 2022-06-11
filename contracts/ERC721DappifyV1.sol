@@ -8,31 +8,23 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract ERC2981TokenV1 is ERC721, ERC2981, ERC721URIStorage, Ownable {
+contract ERC721DappifyV1 is ERC2981, ERC721URIStorage, Ownable {
 
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    constructor() ERC721("DappifyAPP", "DDAPP") {}
+    constructor() ERC721("DappifyNFT", "DNFT") {}
 
-    function mint(address _receiver, address _beneficiary, uint96 _feeNumerator) public {
+    function mint(address _receiver, address _beneficiary, uint96 _feeNumerator, string memory _tokenURI) public {
          _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
         _safeMint(_receiver, newItemId);
         _setDefaultRoyalty(_beneficiary, _feeNumerator);
+        _setTokenURI(newItemId, _tokenURI);
     }
 
-    function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {
+    function _burn(uint256 tokenId) internal override( ERC721URIStorage) {
         super._burn(tokenId);
-    }
-
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        override(ERC721, ERC721URIStorage)
-        returns (string memory)
-    {
-        return super.tokenURI(tokenId);
     }
 
     function setDefaultRoyalty(address _receiver, uint96 _feeNumerator) public {

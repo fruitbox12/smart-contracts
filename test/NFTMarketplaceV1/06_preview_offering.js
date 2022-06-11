@@ -11,11 +11,12 @@ const runTestPreview = async ({
     creatorFee,
     operatorFee,
     providerFee,
-    price
+    price,
+    tokenUri
 }) => {
-    const tx = await royaltyTokenContract.mint(seller.address, seller.address, creatorFee);
+    const tx = await royaltyTokenContract.mint(seller.address, seller.address, creatorFee, tokenUri);
     const transaction = await tx.wait();
-    const tokenId = transaction.logs[0].topics[3];
+    const tokenId = transaction.events[0].args['tokenId'];
 
     // Set royalty fee before preview
     await marketplace.connect(owner).setRoyaltyFee(operatorFee);
@@ -39,34 +40,36 @@ describe("Marketplace preview offering", () => {
   let royaltyTokenContract;
   let offeringId;
   const price = 200000;
+  const tokenUri = 'https://dappify.com/img/{id}.json';
+  const baseAmount = 10;
+  const tokenId = 1;
 
   beforeEach(async function () {
     // Accounts
     [owner, provider, seller] = await ethers.getSigners();
     // Marketplace
-    const Marketplace = await ethers.getContractFactory('ERC721MarketplaceV1');
+    const Marketplace = await ethers.getContractFactory('NFTMarketplaceV1');
     marketplace = await Marketplace.connect(provider).deploy();
     await marketplace.deployed();
     // Nft
-    const Token = await ethers.getContractFactory('ERC721TokenV1');
+    const Token = await ethers.getContractFactory('ERC721DappifyV1');
     nft = await Token.deploy();
     await nft.deployed();
     // Mint test token to put on marketplace
-    await nft.safeMint(seller.address, 0);
-    expect(await nft.ownerOf(0)).to.equal(seller.address);
+    await nft.mint(seller.address, seller.address, 0, tokenUri);
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft.address, 0, price, owner.address);
+    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
     offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
     // Royalty contract
-    const RoyaltyToken = await ethers.getContractFactory('ERC2981TokenV1');
+    const RoyaltyToken = await ethers.getContractFactory('ERC721DappifyV1');
     royaltyTokenContract = await RoyaltyToken.deploy();
     await royaltyTokenContract.deployed();
   });
 
   it("Should calculate seller cut if stakeholder fees are not set", async () => {
-    const preview = await marketplace.connect(seller).previewPlaceOffering(nft.address, 0, price, owner.address);
+    const preview = await marketplace.connect(seller).previewPlaceOffering(nft.address, tokenId, price, owner.address);
     expect(preview.sellerCut).to.equal(price);
   });
 
@@ -80,7 +83,8 @@ describe("Marketplace preview offering", () => {
         creatorFee: 500,
         operatorFee : 500,
         providerFee : 350,
-        price: 10000
+        price: 10000,
+        tokenUri
     });
   });
 
@@ -94,7 +98,8 @@ describe("Marketplace preview offering", () => {
         creatorFee: 500,
         operatorFee : 500,
         providerFee : 0,
-        price: 123456789
+        price: 123456789,
+        tokenUri
     });
   });
 
@@ -108,7 +113,8 @@ describe("Marketplace preview offering", () => {
         creatorFee: 321,
         operatorFee : 0,
         providerFee : 123,
-        price: 123456789
+        price: 123456789,
+        tokenUri
     });
   });
 
@@ -122,7 +128,8 @@ describe("Marketplace preview offering", () => {
         creatorFee: 0,
         operatorFee : 222,
         providerFee : 123,
-        price: 1000000000000000
+        price: 1000000000000000,
+        tokenUri
     });
   });
 

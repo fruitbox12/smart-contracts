@@ -10,7 +10,7 @@ describe("Marketplace Initialization Settings", () => {
     // // Accounts
     [owner, provider] = await ethers.getSigners();
     // Marketplace
-    const Marketplace = await ethers.getContractFactory('ERC721MarketplaceV1');
+    const Marketplace = await ethers.getContractFactory('NFTMarketplaceV1');
     marketplace = await Marketplace.connect(provider).deploy();
     await marketplace.deployed();
   });
