@@ -13,7 +13,7 @@ contract ERC721DappifyV1 is ERC2981, ERC721URIStorage, Ownable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    constructor() ERC721("DappifyNFT", "DNFT") {}
+    constructor(string memory _name, string memory _symbol) ERC721(_name, _symbol) {}
 
     function mint(address _receiver, address _beneficiary, uint96 _feeNumerator, string memory _tokenURI) public {
          _tokenIds.increment();

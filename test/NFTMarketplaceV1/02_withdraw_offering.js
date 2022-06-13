@@ -21,10 +21,10 @@ describe("Marketplace offer withdrawal", () => {
     await marketplace.deployed();
     // Nft
     const Token = await ethers.getContractFactory('ERC721DappifyV1');
-    nft = await Token.deploy();
+    nft = await Token.deploy('Name', 'Symbol');
     await nft.deployed();
     const Token1155 = await ethers.getContractFactory('ERC1155DappifyV1');
-    nft1155 = await Token1155.deploy();
+    nft1155 = await Token1155.deploy('Name', 'Symbol', 'URI');
     await nft1155.deployed();
   });
 
@@ -34,7 +34,7 @@ describe("Marketplace offer withdrawal", () => {
     const transactionMint = await txMint.wait();
     const tokenId = transactionMint.events[0].args['tokenId'];
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
     offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
@@ -59,7 +59,7 @@ describe("Marketplace offer withdrawal", () => {
     const transactionMint = await txMint.wait();
     const tokenId = transactionMint.events[0].args['id'];
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const tx = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, baseAmount);
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
     offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;

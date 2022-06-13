@@ -12,7 +12,7 @@ describe('Token mint', () => {
     beforeEach(async () => {
         [dappify, beneficiaryA, beneficiaryB, beneficiaryC, builderA, builderB, builderC] = await ethers.getSigners();
         const Token = await ethers.getContractFactory('ERC721DappifyV1');
-        contract = await Token.deploy();
+        contract = await Token.deploy('Name', 'Symbol');
         await contract.deployed();
     });
 

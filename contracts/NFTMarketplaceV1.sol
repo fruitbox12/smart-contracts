@@ -45,6 +45,7 @@ contract NFTMarketplaceV1 {
         address hostContract;
         uint256 tokenId;
         uint256 price;
+        uint256 amount;
         royalty providerRoyalty;
         royalty artistRoyalty;
         royalty operatorRoyalty;
@@ -86,27 +87,29 @@ contract NFTMarketplaceV1 {
         return (providerAmount, operatorAmount, artistReceiver, artistAmount, sellerAmount);
     }
 
-    function previewPlaceOffering(address _hostContract, uint256 _tokenId, uint256 _price, address _operatorReceiver) external view returns (uint256 sellerCut, address artist) {
+    function previewPlaceOffering(address _hostContract, uint256 _tokenId, uint256 _price, address _operatorReceiver, uint256 _amount) external view returns (uint256 sellerCut, address artist) {
         // Provider
-        (uint256 providerAmount) = getRoyaltyValue(_price, feeRegistry[provider]);
-        _price -= providerAmount;
+        uint256 total = _price * _amount;
+        (uint256 providerAmount) = getRoyaltyValue(total, feeRegistry[provider]);
+        total -= providerAmount;
         // Operator
-        (uint256 operatorAmount) = getRoyaltyValue(_price, feeRegistry[_operatorReceiver]);
-        _price -= operatorAmount;
+        (uint256 operatorAmount) = getRoyaltyValue(total, feeRegistry[_operatorReceiver]);
+        total -= operatorAmount;
         // Creator
-        (address artistReceiver, uint256 artistAmount) = ERC2981(_hostContract).supportsInterface(_INTERFACE_ID_ERC2981) ? (ERC2981(_hostContract).royaltyInfo(_tokenId, _price)) : (address(0), 0);
-        _price -= artistAmount;
+        (address artistReceiver, uint256 artistAmount) = ERC2981(_hostContract).supportsInterface(_INTERFACE_ID_ERC2981) ? (ERC2981(_hostContract).royaltyInfo(_tokenId, total)) : (address(0), 0);
+        total -= artistAmount;
         // Seller
-        return (_price, artistReceiver);
+        return (total, artistReceiver);
     }
 
-    function placeOffering (address _hostContract, uint256 _tokenId, uint256 _price, address _operatorReceiver) external {
+    function placeOffering (address _hostContract, uint256 _tokenId, uint256 _price, address _operatorReceiver, uint256 _amount) external {
         if (IERC165(_hostContract).supportsInterface(_INTERFACE_ID_ERC721)) {
             IERC721 hostContract = IERC721(_hostContract);
+            require(_amount == 1, "ERC721 can transact only one at a time");
             require(hostContract.ownerOf(_tokenId) == msg.sender, "Only token owners can put them for sale");
         } else if (IERC165(_hostContract).supportsInterface(_INTERFACE_ID_ERC1155)) {
             IERC1155 hostContract = IERC1155(_hostContract);
-            require(hostContract.balanceOf(msg.sender, _tokenId) >= 1, "Only token owners can put them for sale");
+            require(hostContract.balanceOf(msg.sender, _tokenId) >= _amount, "Only token owners can put them for sale");
         }
 
         bytes32 offeringId = keccak256(abi.encodePacked(offeringNonce, _hostContract, _tokenId));
@@ -115,6 +118,7 @@ contract NFTMarketplaceV1 {
         offeringRegistry[offeringId].hostContract = _hostContract;
         offeringRegistry[offeringId].tokenId = _tokenId;
         offeringRegistry[offeringId].price = _price;
+        offeringRegistry[offeringId].amount = _amount;
 
         (uint256 providerCut,
          uint256 operatorCut,
@@ -152,37 +156,42 @@ contract NFTMarketplaceV1 {
         emit  OfferingUpdated(_offeringId, _price);
     }
 
-    function payoutOffering(bytes32 _offeringId) private {
+    function payoutOffering(bytes32 _offeringId, uint256 _amount) private {
+        require(offeringRegistry[_offeringId].amount >= _amount, "Offer cannot be fulfilled");
         require(offeringRegistry[_offeringId].closed != true, "Offering is closed");
-        offeringRegistry[_offeringId].closed = true;
+        offeringRegistry[_offeringId].amount = offeringRegistry[_offeringId].amount - _amount;
+        if (offeringRegistry[_offeringId].amount == 0) {
+         offeringRegistry[_offeringId].closed = true;
+        }
         // Payout
         if (offeringRegistry[_offeringId].providerRoyalty.receiver != address(0)) {
-            payable(offeringRegistry[_offeringId].providerRoyalty.receiver).transfer(offeringRegistry[_offeringId].providerRoyalty.royaltyFraction);
+            payable(offeringRegistry[_offeringId].providerRoyalty.receiver).transfer(offeringRegistry[_offeringId].providerRoyalty.royaltyFraction * _amount);
         }
         if (offeringRegistry[_offeringId].operatorRoyalty.receiver != address(0)) {
-            payable(offeringRegistry[_offeringId].operatorRoyalty.receiver).transfer(offeringRegistry[_offeringId].operatorRoyalty.royaltyFraction);
+            payable(offeringRegistry[_offeringId].operatorRoyalty.receiver).transfer(offeringRegistry[_offeringId].operatorRoyalty.royaltyFraction * _amount);
         }
         if (offeringRegistry[_offeringId].artistRoyalty.receiver != address(0)) {
-            payable(offeringRegistry[_offeringId].artistRoyalty.receiver).transfer(offeringRegistry[_offeringId].artistRoyalty.royaltyFraction);
+            payable(offeringRegistry[_offeringId].artistRoyalty.receiver).transfer(offeringRegistry[_offeringId].artistRoyalty.royaltyFraction * _amount);
         }
         if (offeringRegistry[_offeringId].sellerRoyalty.receiver != address(0)) {
-            payable(offeringRegistry[_offeringId].sellerRoyalty.receiver).transfer(offeringRegistry[_offeringId].sellerRoyalty.royaltyFraction);
+            payable(offeringRegistry[_offeringId].sellerRoyalty.receiver).transfer(offeringRegistry[_offeringId].sellerRoyalty.royaltyFraction * _amount);
         }
     }
     
-    function closeOffering(bytes32 _offeringId) external payable {
+    function closeOffering(bytes32 _offeringId, uint256 _amount) external payable {
         require(msg.value >= offeringRegistry[_offeringId].price, "Not enough funds to buy");
         if (IERC165(offeringRegistry[_offeringId].hostContract).supportsInterface(_INTERFACE_ID_ERC721)) {
             IERC721 hostContract = IERC721(offeringRegistry[_offeringId].hostContract);
+            require(_amount == 1, "ERC721 can transact only one at a time");
             require(hostContract.ownerOf(offeringRegistry[_offeringId].tokenId) == offeringRegistry[_offeringId].offerer, "Offer is no longer valid, token was transfered outside the marketplace");
-            payoutOffering(_offeringId);
+            payoutOffering(_offeringId, _amount);
             hostContract.safeTransferFrom(offeringRegistry[_offeringId].offerer, msg.sender, offeringRegistry[_offeringId].tokenId);
         } else if (IERC165(offeringRegistry[_offeringId].hostContract).supportsInterface(_INTERFACE_ID_ERC1155)) {
             IERC1155 hostContract = IERC1155(offeringRegistry[_offeringId].hostContract);
-            require(hostContract.balanceOf(offeringRegistry[_offeringId].offerer, offeringRegistry[_offeringId].tokenId) > 0, "Offer is no longer valid, token was transfered outside the marketplace");
-            payoutOffering(_offeringId);
+            require(hostContract.balanceOf(offeringRegistry[_offeringId].offerer, offeringRegistry[_offeringId].tokenId) >= _amount, "Offer is no longer valid, token was transfered outside the marketplace");
+            payoutOffering(_offeringId, _amount);
             bytes memory data;
-            hostContract.safeTransferFrom(offeringRegistry[_offeringId].offerer, msg.sender, offeringRegistry[_offeringId].tokenId, 1, data);
+            hostContract.safeTransferFrom(offeringRegistry[_offeringId].offerer, msg.sender, offeringRegistry[_offeringId].tokenId, _amount, data);
         }
         emit OfferingClosed(_offeringId, msg.sender);
     } 

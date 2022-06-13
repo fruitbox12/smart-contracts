@@ -27,10 +27,10 @@ describe("Marketplace sales update", () => {
     await marketplace.deployed();
     // Nft
     const Token = await ethers.getContractFactory('ERC721DappifyV1');
-    nft = await Token.deploy();
+    nft = await Token.deploy('Name', 'Symbol');
     await nft.deployed();
     const Token1155 = await ethers.getContractFactory('ERC1155DappifyV1');
-    nft1155 = await Token1155.deploy();
+    nft1155 = await Token1155.deploy('Name', 'Symbol', 'URI');
     await nft1155.deployed();
     // Provider
     ethProvider = waffle.provider;
@@ -46,7 +46,7 @@ describe("Marketplace sales update", () => {
     expect(await nft.ownerOf(tokenId)).to.equal(seller.address);
 
     // Put on marketplace
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await txOffer.wait();
@@ -84,7 +84,7 @@ describe("Marketplace sales update", () => {
     expect(await nft1155.balanceOf(seller.address, tokenId)).to.equal(baseAmount);
 
     // Put on marketplace
-    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, baseAmount);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await txOffer.wait();
@@ -118,7 +118,7 @@ describe("Marketplace sales update", () => {
 
     // Mint test token to put on marketplace
     await nft.mint(seller.address, owner.address, 0, tokenUri);
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
     
@@ -133,7 +133,7 @@ describe("Marketplace sales update", () => {
 
     // Mint test token to put on marketplace
     await nft1155.mint(seller.address, beneficiary.address, 0, tokenUri, baseAmount);
-    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, 1);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
     
@@ -148,7 +148,7 @@ describe("Marketplace sales update", () => {
 
     // Mint test token to put on marketplace
     await nft.mint(seller.address, seller.address, 0, tokenUri);
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
     
@@ -166,7 +166,7 @@ describe("Marketplace sales update", () => {
 
     // Mint test token to put on marketplace
     await nft1155.mint(seller.address, seller.address, 0, tokenUri, baseAmount);
-    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, baseAmount);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
     
@@ -184,7 +184,7 @@ describe("Marketplace sales update", () => {
 
     // Mint test token to put on marketplace
     await nft.mint(seller.address, seller.address, 0, tokenUri);
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
 
@@ -193,7 +193,7 @@ describe("Marketplace sales update", () => {
     await nft.getApproved(tokenId);
 
     // Purchase, status changed to OfferingClosed
-    const txBuy = await marketplace.connect(buyer).closeOffering(offeringId, {
+    const txBuy = await marketplace.connect(buyer).closeOffering(offeringId, 1, {
         value: price
     });
     await txBuy.wait();
@@ -204,12 +204,12 @@ describe("Marketplace sales update", () => {
   });
 
   it("Should not allow owner to edit price for an NFT offering closed [ERC1155]", async function() {
-    const price = 10000;
+    const price = 100;
     const newPrice = 20000;
 
     // Mint test token to put on marketplace
     await nft1155.mint(seller.address, seller.address, 0, tokenUri, baseAmount);
-    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, baseAmount);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
 
@@ -219,8 +219,8 @@ describe("Marketplace sales update", () => {
     expect(approved).to.equal(true);
 
     // Purchase, status changed to OfferingClosed
-    const txBuy = await marketplace.connect(buyer).closeOffering(offeringId, {
-        value: price
+    const txBuy = await marketplace.connect(buyer).closeOffering(offeringId, baseAmount, {
+        value: price * baseAmount
     });
     await txBuy.wait();
 
@@ -238,7 +238,7 @@ describe("Marketplace sales update", () => {
     expect(await nft.ownerOf(tokenId)).to.equal(seller.address);
 
     // Put on marketplace
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await txOffer.wait();
@@ -273,7 +273,7 @@ describe("Marketplace sales update", () => {
     expect(await nft1155.balanceOf(seller.address, tokenId)).to.equal(baseAmount);
 
     // Put on marketplace
-    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, baseAmount);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await txOffer.wait();
@@ -308,7 +308,7 @@ describe("Marketplace sales update", () => {
     expect(await nft.ownerOf(tokenId)).to.equal(seller.address);
 
     // Put on marketplace
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await txOffer.wait();
@@ -343,7 +343,7 @@ describe("Marketplace sales update", () => {
     expect(await nft.ownerOf(tokenId)).to.equal(seller.address);
 
     // Put on marketplace
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await txOffer.wait();
@@ -379,7 +379,7 @@ describe("Marketplace sales update", () => {
     expect(await nft1155.balanceOf(seller.address, tokenId)).to.equal(baseAmount);
 
     // Put on marketplace
-    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, baseAmount);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await txOffer.wait();

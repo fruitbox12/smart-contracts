@@ -27,7 +27,7 @@ const runTestPreview = async ({
     const creatorCut = (price - providerCut - operatorCut) * creatorFee / 10000;
     const expectedSellerCut = price - providerCut - operatorCut - creatorCut; 
 
-    const preview = await marketplace.connect(seller).previewPlaceOffering(royaltyTokenContract.address, tokenId, price, owner.address);
+    const preview = await marketplace.connect(seller).previewPlaceOffering(royaltyTokenContract.address, tokenId, price, owner.address, 1);
     // expect(preview.sellerCut).to.equal(Math.ceil(expectedSellerCut));
 };
 
@@ -53,23 +53,23 @@ describe("Marketplace preview offering", () => {
     await marketplace.deployed();
     // Nft
     const Token = await ethers.getContractFactory('ERC721DappifyV1');
-    nft = await Token.deploy();
+    nft = await Token.deploy('Name', 'Symbol');
     await nft.deployed();
     // Mint test token to put on marketplace
     await nft.mint(seller.address, seller.address, 0, tokenUri);
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
     offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
     // Royalty contract
     const RoyaltyToken = await ethers.getContractFactory('ERC721DappifyV1');
-    royaltyTokenContract = await RoyaltyToken.deploy();
+    royaltyTokenContract = await RoyaltyToken.deploy('Name', 'Symbol');
     await royaltyTokenContract.deployed();
   });
 
   it("Should calculate seller cut if stakeholder fees are not set", async () => {
-    const preview = await marketplace.connect(seller).previewPlaceOffering(nft.address, tokenId, price, owner.address);
+    const preview = await marketplace.connect(seller).previewPlaceOffering(nft.address, tokenId, price, owner.address, 1);
     expect(preview.sellerCut).to.equal(price);
   });
 

@@ -14,7 +14,7 @@ describe('Token setDefaultRoyalty', () => {
     beforeEach(async () => {
         [dappify, beneficiaryA, beneficiaryB, beneficiaryC, builderA, builderB, builderC] = await ethers.getSigners();
         const Token = await ethers.getContractFactory('ERC1155DappifyV1');
-        contract = await Token.deploy();
+        contract = await Token.deploy('Name', 'Symbol', 'URI');
         await contract.deployed();
     });
 

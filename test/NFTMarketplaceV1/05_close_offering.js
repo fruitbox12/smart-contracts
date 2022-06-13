@@ -6,7 +6,7 @@ const runDistributionTestValidation = async ({
     seller,
     buyer,
     creator,
-    owner,
+    owner, owner2,
     provider,
     marketplace,
     nft,
@@ -14,7 +14,8 @@ const runDistributionTestValidation = async ({
     ethProvider,
     operatorFee,
     providerFee,
-    tokenId
+    tokenId,
+    amount=1
 }) => {
 
     // Allow marketplace to be operator for the transaction
@@ -28,7 +29,7 @@ const runDistributionTestValidation = async ({
     await marketplace.connect(provider).setRoyaltyFee(providerFee);
 
     // Put on marketplace
-    const txSell = await marketplace.connect(seller).placeOffering(target.address, tokenId, price, owner.address);
+    const txSell = await marketplace.connect(seller).placeOffering(target.address, tokenId, price, owner.address, amount);
 
     // Balance snapshot
     const balanceBuyerStart = await ethProvider.getBalance(buyer.address);
@@ -42,8 +43,9 @@ const runDistributionTestValidation = async ({
     const event = transactionSellCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args;
   
     // Purchase
-    const txBuy = await marketplace.connect(buyer).closeOffering(event.offeringId, {
-        value: ethers.utils.parseEther(price.toString())
+    const total = price * amount;
+    const txBuy = await marketplace.connect(buyer).closeOffering(event.offeringId, amount, {
+        value: ethers.utils.parseEther(total.toString())
     });
     const transactionBuyCompleted = await txBuy.wait();
     
@@ -52,32 +54,32 @@ const runDistributionTestValidation = async ({
       expect(await target.ownerOf(tokenId)).to.equal(buyer.address);
       expect(await target.ownerOf(tokenId)).not.to.equal(seller.address);
     } else if (nft1155) {
-      expect(await target.balanceOf(buyer.address, tokenId)).to.equal(1);
-      expect(await target.balanceOf(seller.address, tokenId)).to.equal(9);
+      expect(await target.balanceOf(buyer.address, tokenId)).to.equal(amount);
+      // expect(await target.balanceOf(seller.address, tokenId)).to.equal(0);
     }
 
     const balanceBuyerEnd = await ethProvider.getBalance(buyer.address);
     const totalTxGas = transactionBuyCompleted.cumulativeGasUsed.mul(transactionBuyCompleted.effectiveGasPrice);
 
-    // Zero sum check -> (buyer) start balance - price - gas = buyer end balance
-    const balanceBuyerExpected = balanceBuyerEnd.add(totalTxGas).add(ethers.utils.parseUnits(price.toString()));
+    // Zero sum check -> (buyer) start balance - total - gas = buyer end balance
+    const balanceBuyerExpected = balanceBuyerEnd.add(totalTxGas).add(ethers.utils.parseUnits(total.toString()));
     expect(balanceBuyerStart).to.equal(balanceBuyerExpected);
 
     // Zero sum check -> (provider)
     const balanceProviderEnd = await ethProvider.getBalance(provider.address);
-    expect(event.providerAmount.add(balanceProviderStart)).to.equal(balanceProviderEnd);
+    expect(event.providerAmount.mul(amount).add(balanceProviderStart)).to.equal(balanceProviderEnd);
 
     // Zero sum check -> (operator)
     const balanceOperatorEnd = await ethProvider.getBalance(owner.address);
-    expect(event.operatorAmount.add(balanceOperatorStart)).to.equal(balanceOperatorEnd);
+    expect(event.operatorAmount.mul(amount).add(balanceOperatorStart)).to.equal(balanceOperatorEnd);
 
     // Zero sum check -> (creator)
     const balanceCreatorEnd = await ethProvider.getBalance(creator.address);
-    expect(event.creatorAmount.add(balanceCreatorStart)).to.equal(balanceCreatorEnd);
+    expect(event.creatorAmount.mul(amount).add(balanceCreatorStart)).to.equal(balanceCreatorEnd);
 
     // Zero sum check -> (seller)
     const balanceSellerEnd = await ethProvider.getBalance(seller.address);
-    expect(event.sellerAmount.add(balanceSellerStart)).to.equal(balanceSellerEnd);
+    expect(event.sellerAmount.mul(amount).add(balanceSellerStart)).to.equal(balanceSellerEnd);
 }
 
 describe("Marketplace purchase and sales close", () => {
@@ -97,7 +99,7 @@ describe("Marketplace purchase and sales close", () => {
 
   beforeEach(async function () {
     // Accounts
-    [owner, provider, buyer, buyer2, seller, seller2, creator] = await ethers.getSigners();
+    [owner, owner2, provider, buyer, buyer2, seller, seller2, creator, creator2] = await ethers.getSigners();
     // Royalties
     ownerFee = 5;
     providerFee = 2;
@@ -107,10 +109,10 @@ describe("Marketplace purchase and sales close", () => {
     await marketplace.deployed();
     // Nft
     const Token = await ethers.getContractFactory('ERC721DappifyV1');
-    nft = await Token.connect(creator).deploy();
+    nft = await Token.connect(creator).deploy('Name', 'Symbol');
     await nft.deployed();
     const Token1155 = await ethers.getContractFactory('ERC1155DappifyV1');
-    nft1155 = await Token1155.deploy();
+    nft1155 = await Token1155.deploy('Name', 'Symbol', 'URI');
     await nft1155.deployed();
     // Provider
     ethProvider = waffle.provider;
@@ -409,23 +411,24 @@ describe("Marketplace purchase and sales close", () => {
 
     it("Should distribute correctly royalties on purchase to all stakeholders without with only creator, provider and operator fees [ERC1155]", async () => {
       const creatorRoyalties = 1000;
-      await nft1155.mint(seller.address, creator.address, creatorRoyalties, tokenUri, baseAmount);
-      expect(await nft1155.balanceOf(seller.address, tokenId)).to.equal(baseAmount);
+      await nft1155.mint(seller2.address, creator2.address, creatorRoyalties, tokenUri, baseAmount);
+      expect(await nft1155.balanceOf(seller2.address, tokenId)).to.equal(baseAmount);
 
       await runDistributionTestValidation({
-          price: 1000,
+          price: 100,
           operatorFee: 850,
           providerFee: 700,
-          seller,
+          seller: seller2,
           buyer: buyer2,
-          creator,
-          owner,
+          creator: creator2,
+          owner: owner2,
           provider,
           marketplace,
           nft1155,
           ethProvider,
-          tokenId
+          tokenId,
+          amount: baseAmount
       });
-  });
+    });
 
 });

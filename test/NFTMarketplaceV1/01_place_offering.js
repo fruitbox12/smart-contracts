@@ -27,11 +27,11 @@ describe("Marketplace sales", () => {
     await marketplace.deployed();
     // Nft 721
     const Token721 = await ethers.getContractFactory('ERC721DappifyV1');
-    nft = await Token721.connect(creator).deploy();
+    nft = await Token721.connect(creator).deploy('Name', 'Symbol');
     await nft.deployed();
     // Nft 1155
     const Token1155 = await ethers.getContractFactory('ERC1155DappifyV1');
-    nft1155 = await Token1155.connect(creator).deploy();
+    nft1155 = await Token1155.connect(creator).deploy('Name', 'Symbol', 'URI');
     await nft1155.deployed();
     // Provider
     ethProvider = waffle.provider;
@@ -46,7 +46,7 @@ describe("Marketplace sales", () => {
     expect(await nft.ownerOf(tokenId)).to.equal(seller.address);
 
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const tx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
@@ -69,7 +69,7 @@ describe("Marketplace sales", () => {
     expect(await nft1155.balanceOf(seller.address, tokenId)).to.equal(baseAmount);
 
     // Put on marketplace
-    const tx = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const tx = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, 1);
     
     // Get offeringId from OfferingPlaced event in transaction
     const transactionCompleted = await tx.wait();
@@ -91,7 +91,7 @@ describe("Marketplace sales", () => {
     expect(await nft.ownerOf(tokenId)).to.equal(seller.address);
 
     // Put on marketplace
-    await expect(marketplace.connect(seller2).placeOffering(nft.address, tokenId, price, owner.address))
+    await expect(marketplace.connect(seller2).placeOffering(nft.address, tokenId, price, owner.address, 1))
     .to.be.revertedWith('Only token owners can put them for sale');
   });
 
@@ -103,7 +103,7 @@ describe("Marketplace sales", () => {
     expect(await nft1155.balanceOf(seller.address, tokenId)).to.equal(baseAmount);
 
     // Put on marketplace
-    await expect(marketplace.connect(seller2).placeOffering(nft1155.address, tokenId, price, owner.address))
+    await expect(marketplace.connect(seller2).placeOffering(nft1155.address, tokenId, price, owner.address, 1))
     .to.be.revertedWith('Only token owners can put them for sale');
   });
 
@@ -120,7 +120,7 @@ describe("Marketplace sales", () => {
     expect(approved).to.equal(marketplace.address);
 
     // Put on marketplace
-    const txSell = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txSell = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
 
     // Balance snapshot
     const balanceBuyerStart = await ethProvider.getBalance(buyer.address);
@@ -134,7 +134,7 @@ describe("Marketplace sales", () => {
     const event = transactionSellCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args;
   
     // Purchase
-    const txBuy = await marketplace.connect(buyer).closeOffering(event.offeringId, {
+    const txBuy = await marketplace.connect(buyer).closeOffering(event.offeringId, 1, {
         value: ethers.utils.parseEther(price.toString())
     });
     const transactionBuyCompleted = await txBuy.wait();
@@ -181,7 +181,7 @@ describe("Marketplace sales", () => {
     expect(approved).to.equal(true);
 
     // Put on marketplace
-    const txSell = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txSell = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, 1);
 
     // Balance snapshot
     const balanceBuyerStart = await ethProvider.getBalance(buyer2.address);
@@ -195,7 +195,7 @@ describe("Marketplace sales", () => {
     const event = transactionSellCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args;
   
     // Purchase
-    const txBuy = await marketplace.connect(buyer2).closeOffering(event.offeringId, {
+    const txBuy = await marketplace.connect(buyer2).closeOffering(event.offeringId, 1, {
         value: ethers.utils.parseEther(price.toString())
     });
     const transactionBuyCompleted = await txBuy.wait();
@@ -234,7 +234,7 @@ describe("Marketplace sales", () => {
     // Mint test token to put on marketplace
     await nft.mint(seller.address, seller.address, 0, tokenUri);
 
-    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
 
@@ -242,7 +242,7 @@ describe("Marketplace sales", () => {
     await nft.connect(seller).transferFrom(seller.address, seller2.address, tokenId);
   
     // Someone tries purchase and fails
-    await expect(marketplace.connect(buyer).closeOffering(offeringId, { value: price }))
+    await expect(marketplace.connect(buyer).closeOffering(offeringId, 1, { value: price }))
     .to.be.revertedWith('Offer is no longer valid, token was transfered outside the marketplace');
   });
 
@@ -253,7 +253,7 @@ describe("Marketplace sales", () => {
     // Mint test token to put on marketplace
     await nft1155.mint(seller.address, seller.address, 0, tokenUri, mintedAmount);
 
-    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, 1);
     const transactionCompleted = await txOffer.wait();
     const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
 
@@ -261,8 +261,43 @@ describe("Marketplace sales", () => {
     await nft1155.connect(seller).safeTransferFrom(seller.address, seller2.address, tokenId, mintedAmount, []);
   
     // Someone tries purchase and fails
-    await expect(marketplace.connect(buyer).closeOffering(offeringId, { value: price }))
+    await expect(marketplace.connect(buyer).closeOffering(offeringId, 1, { value: price }))
     .to.be.revertedWith('Offer is no longer valid, token was transfered outside the marketplace');
+  });
+
+  it("Should not allow offering more than 1 instance of a token [ERC721]", async function() {
+    const price = 1000;
+
+    // Mint test token to put on marketplace
+    await nft.mint(seller.address, seller.address, 0, tokenUri);
+
+    // Someone tries purchase and fails
+    await expect(marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 2))
+    .to.be.revertedWith('ERC721 can transact only one at a time');
+  });
+
+  it("Should allow offering more than 1 instance of a token [ERC1155]", async () => {
+    const price = 1000;
+
+    // Mint test token to put on marketplace
+    await nft1155.mint(seller.address, seller.address, 0, tokenUri, 10);
+
+    // Someone tries purchase and fails
+    const txOffer = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, 10);
+    const transactionCompleted = await txOffer.wait();
+    const offeringId = transactionCompleted.events?.filter((item) => {return item.event === "OfferingPlaced"})[0].args.offeringId;
+    expect(offeringId).to.not.be.empty;
+  });
+
+  it("Should not allow offering more than x instances of a token if not in possession [ERC1155]", async () => {
+    const price = 1000;
+
+    // Mint test token to put on marketplace
+    await nft1155.mint(seller.address, seller.address, 0, tokenUri, 10);
+
+    // Someone tries purchase and fails
+    await expect(marketplace.connect(seller2).placeOffering(nft1155.address, tokenId, price, owner.address, 11))
+    .to.be.revertedWith('Only token owners can put them for sale');
   });
 
 });

@@ -11,11 +11,16 @@ import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155URIStorage.sol";
 contract ERC1155DappifyV1 is ERC2981, ERC1155URIStorage, Ownable {
 
     mapping (uint256 => string) private _tokenURIs;
+    string public name;
+    string public symbol;
 
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
-    constructor() ERC1155("DappifyNFT") {}   
+    constructor(string memory _name, string memory _symbol, string memory uri) ERC1155(uri) {
+        name = _name;
+        symbol = _symbol;
+    }   
 
     function mint(address _receiver, address _beneficiary, uint96 _feeNumerator, string memory _tokenURI, uint256 amount) public {
         bytes memory data;

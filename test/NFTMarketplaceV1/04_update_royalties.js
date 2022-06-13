@@ -24,10 +24,10 @@ describe("Marketplace update royalties", () => {
     await marketplace.connect(provider).setRoyaltyFee(providerFee);
     // Nft
     const Token = await ethers.getContractFactory('ERC721DappifyV1');
-    nft = await Token.deploy();
+    nft = await Token.deploy('Name', 'Symbol');
     await nft.deployed();
     const Token1155 = await ethers.getContractFactory('ERC1155DappifyV1');
-    nft1155 = await Token1155.deploy();
+    nft1155 = await Token1155.deploy('Name', 'Symbol', 'URI');
     await nft1155.deployed();
   });
 
@@ -46,7 +46,7 @@ describe("Marketplace update royalties", () => {
     await marketplace.connect(owner).setRoyaltyFee(operatorFee);
     
     // Put on marketplace
-    const sellTx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address);
+    const sellTx = await marketplace.connect(seller).placeOffering(nft.address, tokenId, price, owner.address, 1);
     
     // Get Updated Royalties event in transaction
     const transactionCompleted = await sellTx.wait();
@@ -79,7 +79,7 @@ describe("Marketplace update royalties", () => {
     await marketplace.connect(owner).setRoyaltyFee(operatorFee);
     
     // Put on marketplace
-    const sellTx = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address);
+    const sellTx = await marketplace.connect(seller).placeOffering(nft1155.address, tokenId, price, owner.address, baseAmount);
     
     // Get Updated Royalties event in transaction
     const transactionCompleted = await sellTx.wait();
